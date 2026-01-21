@@ -78,6 +78,7 @@
 
 const express = require("express");
 const app = express();
+const bcrypt = require("bcrypt"); // 1️⃣ bcrypt import
 const User = require("./usermodel");
 
 app.use(express.urlencoded({ extended: true }));
@@ -97,10 +98,27 @@ app.get("/signup", (req, res) => {
   `);
 });
 
-/* ================= SIGNUP SAVE ================= */
+/* ================= SIGNUP SAVE (hashed password) ================= */
 app.post("/signup", async (req, res) => {
-  await User.create(req.body);
-  res.redirect("/login");
+  try {
+    // 1️⃣ Hash the password before saving
+    const hashedPassword = await bcrypt.hash(req.body.password, 10);
+
+    // 2️⃣ Save user with hashed password
+    await User.create({ 
+      firstName: req.body.firstName,
+      lastName: req.body.lastName,
+      address: req.body.address,
+      email: req.body.email,
+      // ...req.body,
+      password: hashedPassword
+    });
+
+    res.redirect("/login");
+  } catch (err) {
+    console.error(err);
+    res.send("Error during signup!");
+  }
 });
 
 /* ================= LOGIN PAGE ================= */
@@ -117,14 +135,23 @@ app.get("/login", (req, res) => {
 
 /* ================= LOGIN CHECK ================= */
 app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  const user = await User.findOne({email,password});
+    // 1️⃣ Find user by email
+    const user = await User.findOne({ email });
+    if (!user) return res.send("❌ Invalid email or password");
 
-  if (user) {
-    res.redirect("/home");
-  } else {
-    res.send("❌ Invalid email or password");
+    // 2️⃣ Compare password with hashed password
+    const match = await bcrypt.compare(password, user.password);
+    if (match) {
+      res.redirect("/home");
+    } else {
+      res.send("❌ Invalid email or password");
+    }
+  } catch (err) {
+    console.error(err);
+    res.send("Error during login!");
   }
 });
 
